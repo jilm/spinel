@@ -18,23 +18,29 @@
 
 package cz.lidinsky.spinel;
 
-import static cz.lidinsky.spinel.SpinelD.getLogger;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Exchange point
+ * Exchange point between processes.
  */
 public class Transaction {
 
+  /**
+   * Received response to the given request. It contains null until the
+   * response is received.
+   */
   private SpinelMessage response;
 
+  /**
+   * Request to be send.
+   */
   private final SpinelMessage request;
 
   /**
    * @param request
-   *            request message
+   *            the request message
    */
   Transaction(SpinelMessage request) {
     this.response = null;
@@ -46,7 +52,12 @@ public class Transaction {
    * request is saved through the put method or until the given timeout.
    *
    * @param timeout
-   *            timeout is milliseconds
+   *            required timeout is milliseconds
+   *
+   * @return responce to the given request
+   *
+   * @throws java.util.concurrent.TimeoutException
+   *
    */
   public synchronized SpinelMessage get(long timeout) throws TimeoutException {
 
@@ -65,6 +76,8 @@ public class Transaction {
 
   /**
    * Returns true iff the response has alredy been passed into this object.
+
+   * @return true iff the get message returns response without bloking
    */
   public synchronized boolean hasResponse() {
     return response != null;
@@ -82,6 +95,8 @@ public class Transaction {
 
   /**
    * Returns given request.
+   *
+   * @return the request
    */
   public SpinelMessage getRequest() {
     return request;

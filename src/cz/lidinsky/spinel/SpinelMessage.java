@@ -18,6 +18,8 @@
 
 package cz.lidinsky.spinel;
 
+import java.util.Arrays;
+
 /**
  *  One message of the Spinel communication protocol. This class
  *  supports only the binary format 97.
@@ -57,6 +59,41 @@ public class SpinelMessage {
    * Message data
    */
   private int[] data;
+
+  @Override
+  public int hashCode() {
+    int hash = 7;
+    hash = 11 * hash + this.adr;
+    hash = 11 * hash + this.sig;
+    hash = 11 * hash + this.inst;
+    hash = 11 * hash + Arrays.hashCode(this.data);
+    return hash;
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj) {
+      return true;
+    }
+    if (obj == null) {
+      return false;
+    }
+    if (getClass() != obj.getClass()) {
+      return false;
+    }
+    final SpinelMessage other = (SpinelMessage) obj;
+    if (this.adr != other.adr) {
+      return false;
+    }
+    if (this.sig != other.sig) {
+      return false;
+    }
+    if (this.inst != other.inst) {
+      return false;
+    }
+    return ((this.data == null || this.data.length == 0) && (other.data == null || other.data.length == 0))
+        || Arrays.equals(this.data, other.data);
+  }
 
   /** Broadcast address */
   public static final int ADR_BROADCAST = 0xFF;
@@ -432,6 +469,12 @@ public class SpinelMessage {
     SpinelMessage ackMessage = new SpinelMessage(adr, ackCode);
     ackMessage.sig = sig;
     return ackMessage;
+  }
+
+  public SpinelMessage getAckMessage(int ackCode, int[] data) {
+    SpinelMessage message = new SpinelMessage(this.getAdr(), ackCode, data);
+    message.sig = this.sig;
+    return message;
   }
 
 }

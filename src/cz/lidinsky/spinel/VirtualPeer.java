@@ -31,13 +31,17 @@ class VirtualPeer {
   private final Socket socket;
 
   /**
-   * A flag that indicates that the socket was closed and this peer is no longer
-   * active.
+   * A flag which indicates that the socket was closed and this peer is no
+   * longer active.
    */
   private boolean closed;
 
   private final int timeout;
 
+  /**
+   * Simply count number of virtual peers, it is used for just reporting
+   * purposis.
+   */
   private static int counter = 0;
 
   VirtualPeer(Socket socket) {
@@ -59,9 +63,9 @@ class VirtualPeer {
   void run() {
     try (
         SpinelInputStream is
-        = new SpinelInputStream(socket.getInputStream());
+          = new SpinelInputStream(socket.getInputStream());
         SpinelOutputStream os
-        = new SpinelOutputStream(socket.getOutputStream());) {
+          = new SpinelOutputStream(socket.getOutputStream());) {
 
       SpinelD.getLogger().info("Going to start wirtual peer loop");
 

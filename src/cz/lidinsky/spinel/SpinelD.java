@@ -31,13 +31,15 @@ public class SpinelD {
   private final PhysicalPeer[] clients;
 
   /**
-   * The table to find a physical address to the given virtual address.
+   * The translate table between the physical and virtual address. The index
+   * represents the virtual address, whereas the content is appropriate
+   * physical address. Unused virtual addresses contains negative number.
    */
   private final int[] addressTable;
 
   /**
    * Initialize internal state. This object is singleton, private constructor
-   * prevents instance creation.
+   * prevents instance creation. Use getInstance instead.
    */
   private SpinelD() {
     stop = false;
@@ -86,6 +88,8 @@ public class SpinelD {
         instance.clients[virtualAddress] = clientMap.get(socketAddress);
       }
     }
+    System.out.println("physical peers: ");
+    clientMap.values().stream().map(peer -> peer.toString()).forEach(System.out::println);
     // start the daemon
     instance.start();
   }
@@ -164,6 +168,13 @@ public class SpinelD {
     }
   }
 
+  /**
+   *
+   * @param request
+   *            a request from the virtual peer
+   *
+   * @return
+   */
   Transaction putRequest(SpinelMessage request) {
 
     int virtualAddress = request.getAdr();
@@ -188,6 +199,9 @@ public class SpinelD {
     }
   }
 
+  /**
+   *
+   */
   private class TransformedTransaction extends Transaction {
 
     private Function<SpinelMessage, SpinelMessage> transform;

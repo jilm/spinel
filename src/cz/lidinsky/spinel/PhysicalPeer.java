@@ -107,6 +107,7 @@ public class PhysicalPeer {
 
   private void start() {
     if (closed) {
+      closed = false;
       new Thread(this::run).start();
     }
   }
@@ -115,11 +116,26 @@ public class PhysicalPeer {
     stop = true;
   }
 
+  /**
+   * Wrap up the given request by the transaction object and insert it into
+   * the internal queue. The request is then send as soon as the preceded
+   * requests are finished.
+   *
+   * @param request
+   *            request to send
+   *
+   * @return transaction object through which the response coudl be obtained
+   */
   public Transaction putRequest(SpinelMessage request) {
     Transaction transaction = new Transaction(request);
     queue.add(transaction);
     start();
     return transaction;
+  }
+
+  @Override
+  public String toString() {
+    return String.format("A physical peer object, host: %s, port: %d", host, port);
   }
 
 }
