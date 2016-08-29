@@ -14,8 +14,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.ResourceBundle;
-import java.util.concurrent.TimeoutException;
-import java.util.function.Function;
 import java.util.logging.Logger;
 
 /**
@@ -94,6 +92,13 @@ public class SpinelD {
     instance.start();
   }
 
+  protected void createRule(
+      int virtualAddress, int physicalAddress, PhysicalPeer peer) {
+
+    addressTable[virtualAddress] = physicalAddress;
+    clients[virtualAddress] = peer;
+  }
+
   /**
    *
    */
@@ -144,8 +149,8 @@ public class SpinelD {
   }
 
   /**
-   * Server loop, it listens on the given port and a new ViwrualPeer instance is
-   * created for each incoming connection. This method is run as a separate
+   * Server loop, it listens on the given port and a new VirtualPeer instance is
+   * created for each incoming connection. This method runs as a separate
    * thred. Once this thread is terminated, the whole application is stopped.
    */
   private void run() {
@@ -200,28 +205,23 @@ public class SpinelD {
   }
 
   /**
+   * Transform a message from virtual peer into the message form physical peer.
    *
+   * @param message
+   * @return
    */
-  private class TransformedTransaction extends Transaction {
-
-    private Function<SpinelMessage, SpinelMessage> transform;
-
-    private Transaction transaction;
-
-    TransformedTransaction(Transaction transaction, Function<SpinelMessage, SpinelMessage> transform) {
-      super(transaction.getRequest());
-      this.transform = transform;
-      this.transaction = transaction;
-    }
-
-    @Override
-    void put(SpinelMessage message) {
-      transaction.put(transform.apply(message));
-    }
-
-    @Override
-    public SpinelMessage get(long timeout) throws TimeoutException {
-      return transaction.get(timeout);
+  protected SpinelMessage virtual2physical(SpinelMessage message) {
+    int virtualAddress = message.getAdr();
+    // translate it
+    int physicalAddress = addressTable[virtualAddress];
+    if (physicalAddress < 0 || physicalAddress > 255) {
+      // unsupported virtual address
+      throw new IndexOutOfBoundsException(
+        String.format(
+              SpinelD.getMessages().getString("UNSUPPORTED_VIRTUAL_ADDRESS"),
+              virtualAddress));
+    } else {
+      return message.modify(physicalAddress, 0);
     }
   }
 
