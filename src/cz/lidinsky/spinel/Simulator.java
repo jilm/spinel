@@ -28,13 +28,14 @@ public class Simulator {
   public static void main(String[] args) throws Exception {
     ServerSocket server = new ServerSocket(12341);
     Socket socket = server.accept();
-    SpinelInputStream is = new SpinelInputStream(socket.getInputStream());
-    SpinelOutputStream os = new SpinelOutputStream(socket.getOutputStream());
-    while (true) {
-      SpinelMessage message = is.readMessage();
-      System.out.println("got message: " + message.toString());
-      os.write(message);
-    }
+    VirtualPeer peer = new VirtualPeer(socket) {
+      @Override
+      protected SpinelMessage process(SpinelMessage request) {
+        SpinelMessage response = request.getAckMessage(SpinelMessage.ACK_BAD_INST);
+        return response;
+      }
+    };
+    peer.start();
   }
 
 }

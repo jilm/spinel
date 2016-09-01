@@ -62,12 +62,12 @@ public class SpinelD {
     configuration.load(new java.io.FileInputStream(args[0]));
 
     // create and configure deamon instance
-    instance = new SpinelD();
+    instance = SpinelD.getInstance();
     instance.port
         = Integer.parseInt(configuration.getProperty("port", "12340"));
-    instance.logger
-        = Logger.getLogger(
-            configuration.getProperty("logger", "cz.lidinsky.spinel"));
+    //instance.logger
+    //    = Logger.getLogger(
+    //        configuration.getProperty("logger", "cz.lidinsky.spinel"));
 
     // create list of clients and translate table
     Map<InetSocketAddress, PhysicalPeer> clientMap = new HashMap<>();
@@ -103,20 +103,20 @@ public class SpinelD {
    *
    */
   static ResourceBundle getMessages() {
-    return instance.messages;
+    return getInstance().messages;
   }
 
   /**
    * Returns application logger.
    */
   static Logger getLogger() {
-    return instance.logger;
+    return logger;
   }
 
   /**
    * Application logger.
    */
-  private Logger logger;
+  public static final Logger logger = Logger.getLogger("cz.lidinsky.spinel");
 
   private final ResourceBundle messages;
 
@@ -129,7 +129,7 @@ public class SpinelD {
    * Returns the only instance of this object.
    */
   static SpinelD getInstance() {
-    return instance;
+    return instance == null ? new SpinelD() : instance;
   }
 
   /**

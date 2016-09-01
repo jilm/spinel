@@ -75,11 +75,7 @@ class VirtualPeer {
           SpinelMessage request = is.readMessage();
           SpinelD.getLogger().fine("Request received");
           // hand it over
-          Transaction transaction = SpinelD.getInstance().putRequest(request);
-          SpinelD.getLogger().fine("Request sent to the virtual peer");
-          // wait for response
-          SpinelMessage response;
-          response = transaction.get(timeout);
+          SpinelMessage response = process(request);
           SpinelD.getLogger().fine("response received");
           // send it
           os.write(response);
@@ -99,6 +95,15 @@ class VirtualPeer {
           String.format("Virtual peer going to stop; number of peers: %d",
               --counter));
     }
+  }
+
+  protected SpinelMessage process(SpinelMessage request) throws TimeoutException {
+          // hand it over
+          Transaction transaction = SpinelD.getInstance().putRequest(request);
+          SpinelD.getLogger().fine("Request sent to the virtual peer");
+          // wait for response
+          SpinelMessage response = transaction.get(timeout);
+          return response;
   }
 
 }
