@@ -1,7 +1,18 @@
 /*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
+ * Copyright (C) 2016 jilm
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 package cz.lidinsky.spinel;
 
@@ -41,7 +52,7 @@ public class SpinelD {
    */
   private SpinelD() {
     stop = false;
-    messages = ResourceBundle.getBundle("cz/lidinsky/spinel/messages");
+    //messages = ResourceBundle.getBundle("cz/lidinsky/spinel/messages");
     clients = new PhysicalPeer[256];
     Arrays.fill(clients, null);
     addressTable = new int[256];
@@ -118,7 +129,7 @@ public class SpinelD {
    */
   public static final Logger logger = Logger.getLogger("cz.lidinsky.spinel");
 
-  private final ResourceBundle messages;
+  public static final ResourceBundle messages = ResourceBundle.getBundle("cz/lidinsky/spinel/messages");
 
   /**
    * The only instance of this object.

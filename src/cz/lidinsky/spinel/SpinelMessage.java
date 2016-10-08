@@ -37,6 +37,12 @@ public class SpinelMessage {
   public static final int ACK_AUTO_MEASUREMENT = 0x0E;
   public static final int ACK_AUTO_OTHER = 0x0F;
 
+  /** Broadcast address */
+  public static final int ADR_BROADCAST = 0xFF;
+
+  /** Universal address */
+  public static final int ADR_UNIVERSAL = 0xFE;
+
   /** Prefix */
   public static final int PRE = 0x2A;
 
@@ -95,11 +101,6 @@ public class SpinelMessage {
         || Arrays.equals(this.data, other.data);
   }
 
-  /** Broadcast address */
-  public static final int ADR_BROADCAST = 0xFF;
-
-  /** Universal address */
-  public static final int ADR_UNIVERSAL = 0xFE;
 
   /**
    *  Create message with given parameters. SIG is set to zero.
@@ -382,6 +383,7 @@ public class SpinelMessage {
   {
     return data == null ? 0 : data.length;
   }
+
   /**
    *  Check wheather the message is consistent with the spinel
    *  specification.
