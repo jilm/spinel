@@ -406,7 +406,7 @@ public class SpinelMessage {
     if (length < 9) {
       throw new SpinelException(
           String.format(
-            SpinelD.getMessages().getString("SHORT"),
+            SpinelD.messages.getString("SHORT"),
             toString(0, buffer, offset, length)));
     }
 
@@ -414,7 +414,7 @@ public class SpinelMessage {
     if (buffer[offset+0] != PRE) {
       throw new SpinelException(
           String.format(
-            SpinelD.getMessages().getString("PRE"),
+            SpinelD.messages.getString("PRE"),
             toString(0, buffer, offset, length)));
     }
 
@@ -422,7 +422,7 @@ public class SpinelMessage {
     if (buffer[offset+1] != FRM) {
       throw new SpinelException(
           String.format(
-            SpinelD.getMessages().getString("FRM"),
+            SpinelD.messages.getString("FRM"),
             toString(1, buffer, offset, length)));
     }
 
@@ -431,7 +431,7 @@ public class SpinelMessage {
     if (num+4 > length) {
       throw new SpinelException(
           String.format(
-            SpinelD.getMessages().getString("NUM"),
+            SpinelD.messages.getString("NUM"),
             toString(3, buffer, offset, length)));
     }
 
@@ -443,7 +443,7 @@ public class SpinelMessage {
     if (buffer[offset+num+2] != sum) {
       throw new SpinelException(
           String.format(
-            SpinelD.getMessages().getString("SUM"),
+            SpinelD.messages.getString("SUM"),
             toString(length-2, buffer, offset, length)));
     }
 
@@ -451,7 +451,7 @@ public class SpinelMessage {
     if (buffer[offset+num+3] != CR) {
       throw new SpinelException(
           String.format(
-            SpinelD.getMessages().getString("CR"),
+            SpinelD.messages.getString("CR"),
             toString(length-1, buffer, offset, length)));
     }
   }

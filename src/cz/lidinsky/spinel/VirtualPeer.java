@@ -38,17 +38,20 @@ class VirtualPeer {
 
   private final int timeout;
 
+  private final SpinelD daemon;
+
   /**
    * Simply count number of virtual peers, it is used for just reporting
    * purposis.
    */
   private static int counter = 0;
 
-  VirtualPeer(Socket socket) {
+  VirtualPeer(Socket socket, SpinelD daemon) {
     this.socket = socket;
     this.closed = false;
     this.timeout = 2157;
-    SpinelD.getLogger().info(
+    this.daemon = daemon;
+    SpinelD.logger.info(
         String.format("New virtual peer was created; number of peers: %d",
             ++counter));
   }
@@ -67,31 +70,31 @@ class VirtualPeer {
         SpinelOutputStream os
           = new SpinelOutputStream(socket.getOutputStream());) {
 
-      SpinelD.getLogger().info("Going to start wirtual peer loop");
+      SpinelD.logger.info("Going to start wirtual peer loop");
 
       while (!closed) {
         try {
           // wait for request
           SpinelMessage request = is.readMessage();
-          SpinelD.getLogger().fine("Request received");
+          SpinelD.logger.fine("Request received");
           // hand it over
           SpinelMessage response = process(request);
-          SpinelD.getLogger().fine("response received");
+          SpinelD.logger.fine("response received");
           // send it
           os.write(response);
         } catch (TimeoutException ex) {
-          SpinelD.getLogger().fine("timeout");
+          SpinelD.logger.fine("timeout");
           //
         }
       }
     } catch (java.io.EOFException ex) {
     } catch (IOException ex) {
-      SpinelD.getLogger().severe(
+      SpinelD.logger.severe(
           String.format("An exception was catched in the virtual peer! %s",
               ex.getMessage()));
     } finally {
       closed = true;
-      SpinelD.getLogger().info(
+      SpinelD.logger.info(
           String.format("Virtual peer going to stop; number of peers: %d",
               --counter));
     }
@@ -99,8 +102,10 @@ class VirtualPeer {
 
   protected SpinelMessage process(SpinelMessage request) throws TimeoutException {
           // hand it over
-          Transaction transaction = SpinelD.getInstance().putRequest(request);
-          SpinelD.getLogger().fine("Request sent to the virtual peer");
+
+// TODO:
+          Transaction transaction = daemon.putRequest(request);
+          SpinelD.logger.fine("Request sent to the virtual peer");
           // wait for response
           SpinelMessage response = transaction.get(timeout);
           return response;

@@ -18,6 +18,7 @@
 
 package cz.lidinsky.spinel;
 
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.ResourceBundle;
 import java.util.concurrent.BlockingQueue;
@@ -26,27 +27,39 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Communicates with some server (data provider) via the spinel protocol. The
- * request message is placed into the input queue. Than it is sent to the spinel
- * server.
+ * It communicates with some device or devices over the spinel protocol. All
+ * of the devices must share the same host and port.
  */
-public class PhysicalPeer {
+public class PhysicalPeer implements Handler {
 
   /**
-   * Indicate that the connection is not estabilished and the communication loop
-   * is not running.
+   * Indicate that the connection is not estabilished and the communication
+   * loop is not running.
    */
   private volatile boolean closed;
 
+  /**
+   * The requirement to stop the loop and to close the socket.
+   */
   private volatile boolean stop;
 
+  /**
+   * Waiting requests.
+   */
   private final BlockingQueue<Transaction> queue;
 
-  private final String host;
+  private final InetSocketAddress inetSocketAddress;
 
-  private final int port;
-
+  /** Logger. */
   private static final Logger logger;
+
+  /**
+   * Translate table between virtual and physical spinel addresses. The index
+   * of the element represents virtual and the content of the element
+   * represents appropriate physical address. Virtual addresses that are
+   * not used contain negative number.
+   */
+  //private final int[] addressMap;
 
   static {
     logger = Logger.getLogger(PhysicalPeer.class.getName());
@@ -54,29 +67,44 @@ public class PhysicalPeer {
         ResourceBundle.getBundle("cz/lidinsky/spinel/messages"));
   }
 
+  /**
+   * Initialize internal structures.
+   *
+   * @param host
+   * @param port
+   */
   public PhysicalPeer(String host, int port) {
+    this(new InetSocketAddress(host, port));
+  }
+
+  public PhysicalPeer(InetSocketAddress inetSocketAddress) {
+    this.inetSocketAddress = inetSocketAddress;
     this.queue = new LinkedBlockingQueue();
-    this.host = host;
-    this.port = port;
     this.closed = true;
     this.stop = false;
   }
 
+  /**
+   * Intended to be run in the separate thread.
+   */
   private void run() {
     logger.info("PHYSICAL_PEER_START");
     closed = false;
     Transaction transaction = null;
     do {
       try { transaction = queue.take(); } catch (InterruptedException ex) {}
+      if (stop) return;
     } while (transaction == null);
     try (
-        Socket socket = new Socket(host, port);
+        Socket socket = new Socket(
+            inetSocketAddress.getAddress(), inetSocketAddress.getPort());
         SpinelInputStream is
-        = new SpinelInputStream(socket.getInputStream());
+          = new SpinelInputStream(socket.getInputStream());
         SpinelOutputStream os
-        = new SpinelOutputStream(socket.getOutputStream());
+          = new SpinelOutputStream(socket.getOutputStream());
         ) {
-      logger.log(Level.INFO, "PHYSICAL_PEER_CE", new Object[] {host, port});
+      logger.log(Level.INFO, "PHYSICAL_PEER_CE",
+          new Object[] {inetSocketAddress.getHostName(), inetSocketAddress.getPort()});
       socket.setSoTimeout(987);
       while (!stop) {
         SpinelMessage request = transaction.getRequest();
@@ -86,6 +114,7 @@ public class PhysicalPeer {
         transaction = null;
         do {
           try { transaction = queue.take(); } catch (InterruptedException ex) {}
+          if (stop) return;
         } while (transaction == null);
       }
     } catch (Exception e) {
@@ -97,14 +126,16 @@ public class PhysicalPeer {
         transaction = queue.poll();
       }
 
-      // TODO: log exception
       // TODO: write error response
     } finally {
       closed = true;
-      SpinelD.getLogger().info("PHYSICAL_PEER_STOP");
+      SpinelD.logger.info("PHYSICAL_PEER_STOP");
     }
   }
 
+  /**
+   * Starts requests handling in the separate thread.
+   */
   private void start() {
     if (closed) {
       closed = false;
@@ -112,7 +143,11 @@ public class PhysicalPeer {
     }
   }
 
-  void close() {
+  /**
+   * Request to stop the handling thread and close the socket.
+   */
+  @Override
+  public void close() {
     stop = true;
   }
 
@@ -126,6 +161,7 @@ public class PhysicalPeer {
    *
    * @return transaction object through which the response coudl be obtained
    */
+  @Override
   public Transaction putRequest(SpinelMessage request) {
     Transaction transaction = new Transaction(request);
     queue.add(transaction);
@@ -135,7 +171,17 @@ public class PhysicalPeer {
 
   @Override
   public String toString() {
-    return String.format("A physical peer object, host: %s, port: %d", host, port);
+    if (closed) {
+      return String.format(
+          "A closed physical peer object, host: %s, port: %d",
+          inetSocketAddress.getHostName(),
+          inetSocketAddress.getPort());
+    } else {
+      return String.format(
+          "An opened physical peer object, host: %s, port: %d, requests: %d",
+          inetSocketAddress.getHostName(),
+          inetSocketAddress.getPort(), queue.size());
+    }
   }
 
 }

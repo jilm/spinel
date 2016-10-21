@@ -28,7 +28,7 @@ public class Simulator {
   public static void main(String[] args) throws Exception {
     ServerSocket server = new ServerSocket(12341);
     Socket socket = server.accept();
-    VirtualPeer peer = new VirtualPeer(socket) {
+    VirtualPeer peer = new VirtualPeer(socket, null) {
       @Override
       protected SpinelMessage process(SpinelMessage request) {
         SpinelMessage response = request.getAckMessage(SpinelMessage.ACK_BAD_INST);

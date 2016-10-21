@@ -17,9 +17,11 @@
 package cz.lidinsky.spinel;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -28,16 +30,27 @@ import java.util.ResourceBundle;
 import java.util.logging.Logger;
 
 /**
- * Entry point of the application. This object is singleton.
+ * This object provides some sort of spinel communication router. It listends
+ * on the specified port for spinel messages. Than it finds appropriate
+ * handler in the internal table to reply to the obtained message. The lookup
+ * is based on the given spinel address.
+ *
+ * It allows to virtualize devices which communicates over the spinel protocol.
+ * It accepts connections on some given port. New handler is created for each
+ * connection. Such a handler reads spinel message, finds appropriate physical
+ * peer which could respond received message, translate the message, hand it
+ * over, waits for response, translate it back, and send it.
+ *
+ *
  */
-public class SpinelD {
+public class SpinelD implements Runnable {
 
   /**
    * The table to find a physical peer, that can reply to a request with
-   * specified virtual address. Index into the array is the virtual address. It
-   * contains null for virtual addresses that are not used.
+   * specified virtual address. Index into the array is the virtual address.
+   * It contains null for virtual addresses that are not used.
    */
-  private final PhysicalPeer[] clients;
+  private final Handler[] clients;
 
   /**
    * The translate table between the physical and virtual address. The index
@@ -46,17 +59,41 @@ public class SpinelD {
    */
   private final int[] addressTable;
 
+  /** The port the server listen to. */
+  private final int port;
+
+  /**
+   * Application logger.
+   */
+  public static final Logger logger = Logger.getLogger("cz.lidinsky.spinel");
+
+  /**
+   * Messages.
+   */
+  public static final ResourceBundle messages
+      = ResourceBundle.getBundle("cz/lidinsky/spinel/messages");
+
+  /** requirement to stop. */
+  private boolean stop;
+
+  private final Map<InetSocketAddress, PhysicalPeer> peers;
+
   /**
    * Initialize internal state. This object is singleton, private constructor
    * prevents instance creation. Use getInstance instead.
+   *
+   * @param port
+   *            port the server listen to
    */
-  private SpinelD() {
+  public SpinelD(final int port) {
     stop = false;
     //messages = ResourceBundle.getBundle("cz/lidinsky/spinel/messages");
-    clients = new PhysicalPeer[256];
+    clients = new Handler[256];
     Arrays.fill(clients, null);
     addressTable = new int[256];
     Arrays.fill(addressTable, -1);
+    this.port = port;
+    this.peers = new HashMap<>();
   }
 
   /**
@@ -73,9 +110,8 @@ public class SpinelD {
     configuration.load(new java.io.FileInputStream(args[0]));
 
     // create and configure deamon instance
-    instance = SpinelD.getInstance();
-    instance.port
-        = Integer.parseInt(configuration.getProperty("port", "12340"));
+    int port = Integer.parseInt(configuration.getProperty("port", "12340"));
+    SpinelD instance = new SpinelD(port);
     //instance.logger
     //    = Logger.getLogger(
     //        configuration.getProperty("logger", "cz.lidinsky.spinel"));
@@ -87,12 +123,12 @@ public class SpinelD {
         String[] values = configuration.getProperty(key).split(",");
         int virtualAddress = Integer.parseInt(values[0].trim());
         String host = values[1].trim();
-        int port = Integer.parseInt(values[2].trim());
+        int remotePort = Integer.parseInt(values[2].trim());
         int physicalAddress = Integer.parseInt(values[3].trim());
         instance.addressTable[virtualAddress] = physicalAddress;
-        InetSocketAddress socketAddress = new InetSocketAddress(host, port);
+        InetSocketAddress socketAddress = new InetSocketAddress(host, remotePort);
         if (!clientMap.containsKey(socketAddress)) {
-          clientMap.put(socketAddress, new PhysicalPeer(host, port));
+          clientMap.put(socketAddress, new PhysicalPeer(host, remotePort));
         }
         instance.clients[virtualAddress] = clientMap.get(socketAddress);
       }
@@ -103,52 +139,29 @@ public class SpinelD {
     instance.start();
   }
 
-  protected void createRule(
-      int virtualAddress, int physicalAddress, PhysicalPeer peer) {
+  protected synchronized void createRule(
+      int virtualAddress, int physicalAddress, Handler peer) {
 
     addressTable[virtualAddress] = physicalAddress;
     clients[virtualAddress] = peer;
   }
 
-  /**
-   *
-   */
-  static ResourceBundle getMessages() {
-    return getInstance().messages;
+  public synchronized void createRule(
+      int virtualAddress, int physicalAddress, String host, int port) throws UnknownHostException {
+
+    // first of all, take a look if there is a peer with given host and port
+    InetAddress inetAddress = InetAddress.getByName(host);
+    InetSocketAddress inetSocketAddress = new InetSocketAddress(inetAddress, port);
+    PhysicalPeer peer = peers.get(inetSocketAddress);
+    if (peer != null) {
+      createRule(virtualAddress, physicalAddress, peer);
+    } else {
+      // if not create one
+      peer = new PhysicalPeer(inetSocketAddress);
+      createRule(virtualAddress, physicalAddress, peer);
+      peers.put(inetSocketAddress, peer);
+    }
   }
-
-  /**
-   * Returns application logger.
-   */
-  static Logger getLogger() {
-    return logger;
-  }
-
-  /**
-   * Application logger.
-   */
-  public static final Logger logger = Logger.getLogger("cz.lidinsky.spinel");
-
-  public static final ResourceBundle messages = ResourceBundle.getBundle("cz/lidinsky/spinel/messages");
-
-  /**
-   * The only instance of this object.
-   */
-  private static SpinelD instance;
-
-  /**
-   * Returns the only instance of this object.
-   */
-  static SpinelD getInstance() {
-    return instance == null ? new SpinelD() : instance;
-  }
-
-  /**
-   * Port on which the program listens.
-   */
-  private int port;
-
-  private boolean stop;
 
   /**
    * Starts the main thread of the application.
@@ -161,10 +174,12 @@ public class SpinelD {
 
   /**
    * Server loop, it listens on the given port and a new VirtualPeer instance is
-   * created for each incoming connection. This method runs as a separate
-   * thred. Once this thread is terminated, the whole application is stopped.
+   * created for each incoming connection. This method is intende to be run
+   * as a separate thred. Once this thread is terminated, the whole application
+   * is stopped.
    */
-  private void run() {
+  @Override
+  public void run() {
     try (
         ServerSocket server = new ServerSocket(port);) {
       logger.info(
@@ -172,7 +187,7 @@ public class SpinelD {
               messages.getString("SERVER_START"), port));
       while (!stop) {
         Socket socket = server.accept();
-        new VirtualPeer(socket).start();
+        new VirtualPeer(socket, this).start();
       }
     } catch (IOException e) {
       logger.severe(
@@ -198,9 +213,9 @@ public class SpinelD {
     int physicalAddress = addressTable[virtualAddress];
     if (physicalAddress < 0 || physicalAddress > 255) {
       // unsupported virtual address
-      SpinelD.getLogger().warning(
+      SpinelD.logger.warning(
           String.format(
-              SpinelD.getMessages().getString("UNSUPPORTED_VIRTUAL_ADDRESS"),
+              SpinelD.messages.getString("UNSUPPORTED_VIRTUAL_ADDRESS"),
               virtualAddress));
       // TODO: send reply
       // return transaction which wont be replied
@@ -208,7 +223,7 @@ public class SpinelD {
     } else {
       // int sig = storeTransaction(transaction);
       // send it
-      PhysicalPeer client = clients[virtualAddress];
+      Handler client = clients[virtualAddress];
       return new TransformedTransaction(
           client.putRequest(request.modify(physicalAddress, 0)),
           message -> message.modify(virtualAddress, request.getSig()));
@@ -229,11 +244,19 @@ public class SpinelD {
       // unsupported virtual address
       throw new IndexOutOfBoundsException(
         String.format(
-              SpinelD.getMessages().getString("UNSUPPORTED_VIRTUAL_ADDRESS"),
+              SpinelD.messages.getString("UNSUPPORTED_VIRTUAL_ADDRESS"),
               virtualAddress));
     } else {
       return message.modify(physicalAddress, 0);
     }
+  }
+
+  public void close() {
+    stop = true;
+    try (
+      Socket socket =  new Socket("localhost", port);
+        )
+    {} catch (IOException e) {}
   }
 
 }
