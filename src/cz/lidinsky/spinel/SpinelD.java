@@ -117,7 +117,7 @@ public class SpinelD implements Runnable {
     //        configuration.getProperty("logger", "cz.lidinsky.spinel"));
 
     // create list of clients and translate table
-    Map<InetSocketAddress, PhysicalPeer> clientMap = new HashMap<>();
+    //Map<InetSocketAddress, PhysicalPeer> clientMap = new HashMap<>();
     for (String key : configuration.stringPropertyNames()) {
       if (key.startsWith("virtual[")) {
         String[] values = configuration.getProperty(key).split(",");
@@ -125,16 +125,17 @@ public class SpinelD implements Runnable {
         String host = values[1].trim();
         int remotePort = Integer.parseInt(values[2].trim());
         int physicalAddress = Integer.parseInt(values[3].trim());
-        instance.addressTable[virtualAddress] = physicalAddress;
-        InetSocketAddress socketAddress = new InetSocketAddress(host, remotePort);
-        if (!clientMap.containsKey(socketAddress)) {
-          clientMap.put(socketAddress, new PhysicalPeer(host, remotePort));
-        }
-        instance.clients[virtualAddress] = clientMap.get(socketAddress);
+        instance.createRule(virtualAddress, physicalAddress, host, remotePort);
+//        instance.addressTable[virtualAddress] = physicalAddress;
+//        InetSocketAddress socketAddress = new InetSocketAddress(host, remotePort);
+//        if (!clientMap.containsKey(socketAddress)) {
+//          clientMap.put(socketAddress, new PhysicalPeer(host, remotePort));
+//        }
+//        instance.clients[virtualAddress] = clientMap.get(socketAddress);
       }
     }
-    System.out.println("physical peers: ");
-    clientMap.values().stream().map(peer -> peer.toString()).forEach(System.out::println);
+//    System.out.println("physical peers: ");
+//    clientMap.values().stream().map(peer -> peer.toString()).forEach(System.out::println);
     // start the daemon
     instance.start();
   }
