@@ -27,16 +27,50 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * It communicates with some device or devices over the spinel protocol. All
- * of the devices must share the same host and port.
+ * Encapsulates communication over the spinel protocol. Incoming request
+ * messages are placed in the queue and send as soon as it's their go.
+ * 
  */
 public class PhysicalPeer implements Handler {
 
-  /**
-   * Indicate that the connection is not estabilished and the communication
-   * loop is not running.
-   */
-  private volatile boolean closed;
+  public enum Status {
+    
+    /**
+     * After initialization (constructor), connection is not estabilished,
+     * send receive loop is not working. It is just the start state.
+     */
+    INIT;
+    
+    /**
+     * from INIT, after the message is put;
+     * from ERROR, after the message is put;
+     * the object is trying to estabilish the connection.
+     */
+    CONNECTING;
+    
+    /**
+     * from CONNECTING after the connection was opened.
+     */
+    SEND_RECEIVE_LOOP;
+    
+    /**
+     * from any state after the close method has been called. This is the
+     * terminal state.
+     */
+    CLOSED;
+    
+    /**
+     * from CONNECTING, after the making connection process fails;
+     * from SEND_RECEIVE_LOOP after some exception. In this state, object
+     * is waiting form some time.
+     */
+    FAILED;
+    
+    /**
+     * from FAILED after some timeout.
+     */
+    ERROR;    
+  }
 
   /**
    * The requirement to stop the loop and to close the socket.
@@ -44,22 +78,29 @@ public class PhysicalPeer implements Handler {
   private volatile boolean stop;
 
   /**
+   * Status of the object.
+   */
+  private volatile Status status;
+
+  /**
    * Waiting requests.
    */
   private final BlockingQueue<Transaction> queue;
 
+  /**
+   * An address of the peer to communicate with.
+   */
   private final InetSocketAddress inetSocketAddress;
 
   /** Logger. */
   private static final Logger logger;
+  
+  /** An identification of this object for log purposes. */
+  private static String identification;
 
-  /**
-   * Translate table between virtual and physical spinel addresses. The index
-   * of the element represents virtual and the content of the element
-   * represents appropriate physical address. Virtual addresses that are
-   * not used contain negative number.
-   */
-  //private final int[] addressMap;
+  /** If true, indicates that connecting process failed last time. It is used
+      not to log another connecting failure. */
+  private boolean logflag;
 
   static {
     logger = Logger.getLogger(PhysicalPeer.class.getName());
@@ -71,30 +112,88 @@ public class PhysicalPeer implements Handler {
    * Initialize internal structures.
    *
    * @param host
+   *            host name of the remote server
+   *
    * @param port
+   *            port number
    */
   public PhysicalPeer(String host, int port) {
     this(new InetSocketAddress(host, port));
   }
 
   public PhysicalPeer(InetSocketAddress inetSocketAddress) {
+    this.status = Status.INIT;
     this.inetSocketAddress = inetSocketAddress;
     this.queue = new LinkedBlockingQueue();
-    this.closed = true;
     this.stop = false;
+    this.identification = String.format(
+      "An instance of class: %s; host: %s; port %d", 
+      PhysicalPeer.class.getName(),
+      InetSocketAddress.getHost(),
+      InetSocketAddress.getPort());
+  }
+  
+  /**
+   * Changle status to connecting.
+   */
+  private void connecting() {
+    if (status != Status.CONNECTING) {
+      status = Status.CONNECTING;
+      if (!connectingFailureLogged) {
+        logger.info("Going to create connection");
+      }
+    }
+  }
+  
+  /**
+   * Change status to fail.
+   */
+  private void fail(Exception ex) {
+    if (status == Status.CONNECTING) {
+      this.status = Status.FAIL;
+      if (!connectingFailureLogged) {
+        logger.severe("Failed to create connection!");
+        connectingFailureLogged = true;
+      }
+    } else if (status == Status.SEND_RECEIVE_LOOP) {
+      this.status = Status.FAIL;
+      logger.severe("An exception inside the send receive loop");
+    }
+  }
+  
+  /**
+   * Change status to closed.
+   */
+  private void closed() {
+    if (status != Status.CLOSED) {
+      this.status = Status.CLOSED;  
+      logger.info(identification + "has been closed.");
+    }
+  }
+  
+  /**
+   * Change status to error.
+   */
+  private void error() {
+    if (status != Status.ERROR) {
+      this.status = Status.ERROR; 
+    }
+  }
+  
+  /**
+   * Changle status to send receive loop.
+   */
+  private void loop() {
+    this.status = Status.SEND_RECEIVE_LOOP;
   }
 
   /**
-   * Intended to be run in the separate thread.
+   * Send, receive loop; Intended to be run in the separate thread.
    */
   private void run() {
-    logger.info("PHYSICAL_PEER_START");
-    closed = false;
-    Transaction transaction = null;
-    do {
-      try { transaction = queue.take(); } catch (InterruptedException ex) {}
-      if (stop) return;
-    } while (transaction == null);
+    
+    // create connection
+    connecting();
     try (
         Socket socket = new Socket(
             inetSocketAddress.getAddress(), inetSocketAddress.getPort());
@@ -102,23 +201,30 @@ public class PhysicalPeer implements Handler {
           = new SpinelInputStream(socket.getInputStream());
         SpinelOutputStream os
           = new SpinelOutputStream(socket.getOutputStream());
-        ) {
-      logger.log(Level.INFO, "PHYSICAL_PEER_CE",
-          new Object[] {inetSocketAddress.getHostName(), inetSocketAddress.getPort()});
+    ) {
+    
+      // connection was created, enter the request, response loop
+      loop();
       socket.setSoTimeout(987);
       while (!stop) {
+        transaction = null;
+        while (transaction == null) {
+          try { transaction = queue.take(); } catch (InterruptedException ex) {}
+          if (stop) return;
+        }
         SpinelMessage request = transaction.getRequest();
         os.write(request);
         SpinelMessage response = is.readMessage();
         transaction.put(response);
-        transaction = null;
-        do {
-          try { transaction = queue.take(); } catch (InterruptedException ex) {}
-          if (stop) return;
-        } while (transaction == null);
       }
+      this.status = Status.CLOSED;
     } catch (Exception e) {
-      logger.log(Level.SEVERE, "PHYSICAL_PEER_EXCEPTION", e);
+      if (status == Status.CONNECTING) {
+        logger.log(level.SEVERE, "Connection has not been estabished.")
+      } else {
+        logger.log(level.SEVERE, "Exception inside the request response loop")
+      }
+      this.status = Status.FAILED;
       while (transaction != null) {
         transaction.put(
             transaction.getRequest().getAckMessage(
@@ -128,7 +234,6 @@ public class PhysicalPeer implements Handler {
 
       // TODO: write error response
     } finally {
-      closed = true;
       SpinelD.logger.info("PHYSICAL_PEER_STOP");
     }
   }
@@ -137,18 +242,21 @@ public class PhysicalPeer implements Handler {
    * Starts requests handling in the separate thread.
    */
   private void start() {
-    if (closed) {
-      closed = false;
-      new Thread(this::run).start();
-    }
+    new Thread(this::run).start();
   }
 
   /**
    * Request to stop the handling thread and close the socket.
    */
   @Override
-  public void close() {
+  public synchronized void close() {
     stop = true;
+    if (status == Status.INIT || status == Status.ERROR) {
+      status = Status.CLOSED;
+      logger.info("The physical peer has been closed.");
+    } else {
+      logger.info("The physical peer is going to be closed.");
+    }
   }
 
   /**
@@ -159,14 +267,24 @@ public class PhysicalPeer implements Handler {
    * @param request
    *            request to send
    *
-   * @return transaction object through which the response coudl be obtained
+   * @return transaction object through which the response could be obtained
    */
   @Override
-  public Transaction putRequest(SpinelMessage request) {
-    Transaction transaction = new Transaction(request);
-    queue.add(transaction);
-    start();
-    return transaction;
+  public synchronized Transaction putRequest(SpinelMessage request) {
+    switch (status) {
+      case: CLOSED:
+      case: FAILED:
+        throw new IllegalStateException();
+      case: INIT:
+      case: ERROR:
+        Transaction transaction = new Transaction(request);
+        queue.add(transaction);
+        start();
+        return transaction;
+      case SEND_RECEIVE_LOOP:
+      case CONNECTING:
+        return queue.add(new Transaction(request));
+    }
   }
 
   @Override
