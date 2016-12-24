@@ -155,13 +155,17 @@ public class PhysicalPeer implements Handler {
       if (!connectingFailureLogged) {
         logger.log(Level.INFO, "PP_CONNECTING",
             new Object[] {
-              inetSocketAddress.getHostName(), inetSocketAddress.getPort()});
+              inetSocketAddress.getHostName(),
+              inetSocketAddress.getPort()});
       }
     }
   }
 
   /**
    * Change status to fail.
+   *
+   * @param ex
+   *            catched exception
    */
   private void fail(Exception ex) {
     if (status == Status.CONNECTING) {
@@ -169,13 +173,23 @@ public class PhysicalPeer implements Handler {
       if (!connectingFailureLogged) {
         logger.log(Level.SEVERE, "PP_CONNECTING_FAILED",
             new Object[] {
-              inetSocketAddress.getHostName(), inetSocketAddress.getPort()});
+              inetSocketAddress.getHostName(),
+              inetSocketAddress.getPort(),
+              ex.getClass().getName(),
+              ex.getMessage()
+            });
         connectingFailureLogged = true;
         lastException = ex;
       }
     } else if (status == Status.SEND_RECEIVE_LOOP) {
       this.status = Status.FAILED;
-      logger.severe("An exception inside the send receive loop");
+      logger.log(Level.SEVERE, "PP_FAILED",
+          new Object[] {
+            inetSocketAddress.getHostName(),
+            inetSocketAddress.getPort(),
+            ex.getClass().getName(),
+            ex.getMessage()
+          });
       lastException = ex;
     }
   }
@@ -186,7 +200,11 @@ public class PhysicalPeer implements Handler {
   private void closed() {
     if (status != Status.CLOSED) {
       this.status = Status.CLOSED;
-      logger.info(identification + "has been closed.");
+      logger.log(Level.INFO, "PP_CLOSED",
+          new Object[] {
+            inetSocketAddress.getHostName(),
+            inetSocketAddress.getPort()
+          });
     }
   }
 
@@ -196,6 +214,13 @@ public class PhysicalPeer implements Handler {
   private void error() {
     if (status != Status.ERROR) {
       this.status = Status.ERROR;
+      if (!connectingFailureLogged) {
+        logger.log(Level.INFO, "PP_ERROR",
+            new Object[] {
+              inetSocketAddress.getHostName(),
+              inetSocketAddress.getPort()
+            });
+      }
     }
   }
 
@@ -203,7 +228,15 @@ public class PhysicalPeer implements Handler {
    * Changle status to send receive loop.
    */
   private void loop() {
-    this.status = Status.SEND_RECEIVE_LOOP;
+    if (status != Status.SEND_RECEIVE_LOOP) {
+      this.status = Status.SEND_RECEIVE_LOOP;
+      logger.log(Level.INFO, "PP_LOOP",
+            new Object[] {
+              inetSocketAddress.getHostName(),
+              inetSocketAddress.getPort()
+            });
+      connectingFailureLogged = false;
+    }
   }
 
   /**
@@ -237,6 +270,8 @@ public class PhysicalPeer implements Handler {
       closed();
     } catch (Exception e) {
       fail(e);
+      try { Thread.sleep(1784); } catch (InterruptedException ex) {}
+      error();
     } finally {
       logger.fine("Leaving the request, response loop.");
     }
