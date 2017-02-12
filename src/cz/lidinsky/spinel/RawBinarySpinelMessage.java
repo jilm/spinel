@@ -69,7 +69,7 @@ public class RawBinarySpinelMessage {
     int frm = readChar(stream);
     int num = readChar(stream) * 0x100;
     num += readChar(stream);
-    byte[] data = new byte[num];
+    byte[] data = new byte[num-1];
     for (int i = 0; i < num - 1; i++) {
       data[i] = (byte)readChar(stream);
     }
