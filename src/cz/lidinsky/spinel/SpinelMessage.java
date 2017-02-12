@@ -18,6 +18,7 @@
 
 package cz.lidinsky.spinel;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 /**
@@ -116,6 +117,17 @@ public class SpinelMessage {
    */
   public SpinelMessage(int address, int instruction, int[] data) {
     this(address, instruction, data, 0, data.length);
+  }
+
+  public SpinelMessage(int address, int instruction, ByteBuffer data) {
+    this.adr = address;
+    this.sig = 0;
+    this.inst = instruction;
+    byte[] dataBuffer = data.array();
+    this.data = new int[dataBuffer.length];
+    for (int i = 0; i < dataBuffer.length; i++) {
+      this.data[i] = ((int)dataBuffer[i] & 0xff);
+    }
   }
 
   public SpinelMessage(
@@ -477,6 +489,16 @@ public class SpinelMessage {
     SpinelMessage message = new SpinelMessage(this.getAdr(), ackCode, data);
     message.sig = this.sig;
     return message;
+  }
+
+  public ByteBuffer getData() {
+    int len = data.length;
+    ByteBuffer buffer = ByteBuffer.allocate(len);
+    for (int i = 0; i < len; i++) {
+      buffer.put((byte)data[i]);
+    }
+    buffer.rewind();
+    return buffer;
   }
 
 }
